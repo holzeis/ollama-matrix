@@ -1,0 +1,11 @@
+[package]
+name = "ollama-matrix"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ollama-rs = "0.3"
+matrix-sdk = "0.11.0"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0.98"
