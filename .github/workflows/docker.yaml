@@ -1,69 +1,53 @@
-  name: Build and publish Docker image
+name: publish-docker
 
-  on:
-    push:
-      branches:
-        - main
-      tags:
-        - 'v*.*.*'
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
 
-  env:
-    IMAGE: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+env:
+  REGISTRY: ghcr.io
 
-  permissions:
-    contents: read
-    packages: write
-    id-token: write
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            docker_arch: amd64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout tagged commit
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.ref }}
 
-  jobs:
-    build-and-push:
-      runs-on: ubuntu-latest
+      - name: Setup rust toolchain
+        run: rustup show
 
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2.0.1
 
-        - name: Set up QEMU
-          uses: docker/setup-qemu-action@v2
+      - name: Login into github registry
+        uses: docker/login-action@v2.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-        - name: Set up Docker Buildx
-          uses: docker/setup-buildx-action@v2
+      - name: Build ollama-matrix
+        run: cargo build --release --bin ollama-matrix --target-dir ./target --target=${{ matrix.target }}
 
-        - name: Log in to GitHub Container Registry
-          uses: docker/login-action@v2
-          with:
-            registry: ghcr.io
-            username: ${{ github.actor }}
-            password: ${{ secrets.GITHUB_TOKEN }}
-
-        - name: Extract tag
-          id: tag
-          run: |
-            if [[ "${GITHUB_REF_TYPE:-}" == "tag" || "${GITHUB_REF##*/}" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
-              echo "ref_tag=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
-            else
-              echo "ref_tag=" >> $GITHUB_OUTPUT
-            fi
-
-        - name: Set image tags
-          id: imgtags
-          run: |
-            # prepare newline-separated tags, omit release tag if empty
-            TAGS="${{ env.IMAGE }}:latest\n${{ env.IMAGE }}:${{ github.sha }}"
-            if [ -n "${{ steps.tag.outputs.ref_tag }}" ]; then
-              TAGS="$TAGS\n${{ env.IMAGE }}:${{ steps.tag.outputs.ref_tag }}"
-            fi
-            echo "tags<<EOF" >> $GITHUB_OUTPUT
-            printf "%b\n" "$TAGS" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-
-        - name: Build and push Docker image
-          uses: docker/build-push-action@v4
-          with:
-            context: .
-            file: ./Dockerfile
-            platforms: linux/amd64,linux/arm64
-            push: true
-            tags: ${{ steps.imgtags.outputs.tags }}
-            cache-from: type=gha
-            cache-to: type=gha,mode=max
+      - name: Build docker image
+        run: |
+          docker build --platform linux/${{ matrix.docker_arch }} --pull --build-arg BINARY=target/${{ matrix.target }}/release/ollama-matrix --tag ${{ env.REGISTRY }}/${{ github.repository }}/ollama-matrix:latest .
+          docker push ${{ env.REGISTRY }}/${{ github.repository }}/ollama-matrix:latest
