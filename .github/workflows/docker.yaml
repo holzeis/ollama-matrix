@@ -49,5 +49,5 @@ jobs:
 
       - name: Build docker image
         run: |
-          docker build --platform linux/${{ matrix.docker_arch }} --pull --build-arg BINARY=target/${{ matrix.target }}/release/ollama-matrix --tag ${{ env.REGISTRY }}/${{ github.repository }}/ollama-matrix:latest .
-          docker push ${{ env.REGISTRY }}/${{ github.repository }}/ollama-matrix:latest
+          docker build --platform linux/${{ matrix.docker_arch }} --pull --build-arg BINARY=target/${{ matrix.target }}/release/ollama-matrix --tag ${{ env.REGISTRY }}/${{ github.repository }}:latest .
+          docker push ${{ env.REGISTRY }}/${{ github.repository }}:latest
