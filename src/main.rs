@@ -33,11 +33,12 @@ pub async fn main() -> anyhow::Result<()> {
         .await?;
 
     // Then let's log that client in
-    client
+    let user_id = client
         .matrix_auth()
         .login_username(username.clone(), &password)
         .initial_device_display_name("Ollama")
-        .await?;
+        .await?.user_id;
+
 
     println!("logged in as {username}");
 
@@ -58,6 +59,11 @@ pub async fn main() -> anyhow::Result<()> {
             let MessageType::Text(text_content) = event.content.msgtype else {
                 return;
             };
+
+            if event.sender.eq(&user_id) {
+                // ignore messages from ourselves
+                return;
+            }
 
             // here comes the actual "logic": when the bot see's a `!party` in the message,
             // it responds
