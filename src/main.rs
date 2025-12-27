@@ -18,6 +18,8 @@ pub async fn main() -> anyhow::Result<()> {
         .context("missing environment variable `OLLAMA_PASSWORD`")?;
     let ollama_url = std::env::var("OLLAMA_URL")
         .context("missing environment variable `OLLAMA_URL`")?;
+    let ollama_model = std::env::var("OLLAMA_MODEL")
+        .context("missing environment variable `OLLAMA_MODEL`")?;
     let homeserver_url = std::env::var("HOMESERVER_URL")
         .context("missing environment variable `HOMESERVER_URL`")?;
 
@@ -73,7 +75,7 @@ pub async fn main() -> anyhow::Result<()> {
                     .send_chat_messages_with_history(
                         &mut history,
                         ChatMessageRequest::new(
-                            "gemma3".to_string(),
+                            ollama_model,
                             vec![ChatMessage::new(
                                 MessageRole::User,
                                 text_content.clone().body,
