@@ -1,3 +1,4 @@
+use anyhow::Context;
 use matrix_sdk::ruma::events::room::member::StrippedRoomMemberEvent;
 use matrix_sdk::ruma::events::room::message::{
     MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent,
@@ -7,7 +8,6 @@ use ollama_rs::Ollama;
 use ollama_rs::generation::chat::request::ChatMessageRequest;
 use ollama_rs::generation::chat::{ChatMessage, MessageRole};
 use std::time::Duration;
-use anyhow::Context;
 use tokio::time::sleep;
 
 #[tokio::main]
@@ -16,12 +16,12 @@ pub async fn main() -> anyhow::Result<()> {
         .context("missing environment variable `OLLAMA_USERNAME`")?;
     let password = std::env::var("OLLAMA_PASSWORD")
         .context("missing environment variable `OLLAMA_PASSWORD`")?;
-    let ollama_url = std::env::var("OLLAMA_URL")
-        .context("missing environment variable `OLLAMA_URL`")?;
-    let ollama_model = std::env::var("OLLAMA_MODEL")
-        .context("missing environment variable `OLLAMA_MODEL`")?;
-    let homeserver_url = std::env::var("HOMESERVER_URL")
-        .context("missing environment variable `HOMESERVER_URL`")?;
+    let ollama_url =
+        std::env::var("OLLAMA_URL").context("missing environment variable `OLLAMA_URL`")?;
+    let ollama_model =
+        std::env::var("OLLAMA_MODEL").context("missing environment variable `OLLAMA_MODEL`")?;
+    let homeserver_url =
+        std::env::var("HOMESERVER_URL").context("missing environment variable `HOMESERVER_URL`")?;
 
     // Note that when encryption is enabled, you should use a persistent store to be
     // able to restore the session with a working encryption setup.
@@ -37,8 +37,8 @@ pub async fn main() -> anyhow::Result<()> {
         .matrix_auth()
         .login_username(username.clone(), &password)
         .initial_device_display_name("Ollama")
-        .await?.user_id;
-
+        .await?
+        .user_id;
 
     println!("logged in as {username}");
 
@@ -77,7 +77,7 @@ pub async fn main() -> anyhow::Result<()> {
 
                 println!("message sent");
             } else {
-                let response = ollama
+                let response = match ollama
                     .send_chat_messages_with_history(
                         &mut history,
                         ChatMessageRequest::new(
@@ -89,13 +89,26 @@ pub async fn main() -> anyhow::Result<()> {
                         ),
                     )
                     .await
-                    .unwrap();
+                {
+                    Ok(resp) => resp,
+                    Err(e) => {
+                        eprintln!("Error communicating with Ollama: {}", e);
+                        let content = RoomMessageEventContent::text_plain(
+                            "Sorry, I couldn't process your request at the moment.",
+                        );
+                        if let Err(err) =  room.send(content).await {
+                            eprintln!("Failed to send error message to room: {}", err)
+                        }
+                        return;
+                    }
+                };
 
                 let content = RoomMessageEventContent::text_plain(response.message.content);
                 println!("sending");
 
-                // send our message to the room we found the "!party" command in
-                room.send(content).await.unwrap();
+                if let Err(err) = room.send(content).await {
+                    eprintln!("Failed to send error message to room: {}", err)
+                }
 
                 println!("message sent");
             }
